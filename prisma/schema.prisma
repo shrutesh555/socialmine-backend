@@ -11,10 +11,12 @@ datasource db {
 // ENUMS
 // ============================================
 
+// Existing Enums
 enum UserType {
   MINER
   PROJECT_OWNER
   BOTH
+  ADMIN
 }
 
 enum UserStatus {
@@ -44,6 +46,101 @@ enum NotificationType {
   REPLY_COMMENT
   MENTION
   SYSTEM
+  CAMPAIGN_APPROVED         // NEW
+  CAMPAIGN_REJECTED         // NEW
+  TASK_APPROVED            // NEW
+  TASK_REJECTED            // NEW
+  PAYMENT_RECEIVED         // NEW
+  NEW_CAMPAIGN             // NEW
+  CAMPAIGN_ENDING_SOON     // NEW
+}
+
+// NEW Campaign Platform Enums
+enum TokenStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+  INACTIVE
+}
+
+enum CampaignType {
+  SPRINT
+  KARMA
+  CIRCLE
+  COMPETITION
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskType {
+  // Action Category
+  VISIT_LINK
+  INVITES
+  PARTNERSHIP
+  
+  // Social Category
+  TWITTER_FOLLOW
+  TWITTER_RETWEET
+  TWITTER_LIKE
+  TWITTER_POST
+  DISCORD_JOIN
+  TELEGRAM_JOIN
+  TIKTOK
+  
+  // Answer Category
+  UPLOAD
+  POLL
+  TEXT_ANSWER
+  NUMBER_ANSWER
+  URL_ANSWER
+  
+  // On-Chain Category
+  TOKEN_HOLD
+  ONCHAIN_ACTION
+  
+  // Custom Category
+  QUIZ
+  SURVEY
+  CONTENT_CREATION
+  CUSTOM
+  REFERRAL
+}
+
+enum VerificationType {
+  AUTO
+  MANUAL
+  HYBRID
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  UNDER_REVIEW
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BadgeTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+  LEGEND
 }
 
 // ============================================
@@ -61,6 +158,10 @@ model User {
   updatedAt     DateTime   @updatedAt @map("updated_at")
   lastLogin     DateTime?  @map("last_login")
   status        UserStatus @default(ACTIVE)
+  referredBy    String?    @map("referred_by") @db.Uuid
+  referrer      User?      @relation("UserReferrals", fields: [referredBy], references: [id])
+  referrals     User[]     @relation("UserReferrals")
+  referralCodes ReferralCode[]
 
   // Existing relations
   profile           UserProfile?
@@ -78,6 +179,21 @@ model User {
   notifications        Notification[]
   notificationsActedOn Notification[] @relation("NotificationActor")
 
+  // NEW: Campaign Platform Relations
+  ownedTokens           Token[]                  @relation("TokenOwner")
+  ownedCampaigns        Campaign[]               @relation("CampaignOwner")
+  campaignParticipations CampaignParticipation[]
+  submissions           Submission[]
+  reviews               Review[]                 @relation("Reviewer")
+  paymentsReceived      Payment[]                @relation("PaymentRecipient")
+  paymentsSent          Payment[]                @relation("PaymentSender")
+  badges                UserBadge[]
+
+  // Add these new relations:
+  conversationsAsParticipant1 Conversation[] @relation("ConversationParticipant1")
+  conversationsAsParticipant2 Conversation[] @relation("ConversationParticipant2")
+  messagesSent                Message[]      @relation("MessageSender")
+
   @@index([email])
   @@index([username])
   @@map("users")
@@ -89,9 +205,18 @@ model UserProfile {
   displayName           String?  @map("display_name")
   bio                   String?
   avatarUrl             String?  @map("avatar_url")
+  
+  // Campaign Stats (already exists!)
   totalEarned           Decimal  @default(0) @map("total_earned") @db.Decimal(20, 8)
   tasksCompleted        Int      @default(0) @map("tasks_completed")
   campaignsParticipated Int      @default(0) @map("campaigns_participated")
+  
+  // NEW: Additional Miner Stats
+  experiencePoints      Int      @default(0) @map("experience_points")
+  level                 Int      @default(1)
+  trustScore            Int      @default(500) @map("trust_score")
+  approvalRate          Decimal  @default(0) @map("approval_rate") @db.Decimal(5, 2)
+  
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
@@ -131,7 +256,219 @@ model SocialConnection {
 }
 
 // ============================================
-// SOCIAL FEATURES
+// CAMPAIGN PLATFORM - TOKEN MANAGEMENT
+// ============================================
+
+model Token {
+  id              String      @id @default(uuid()) @db.Uuid
+  ownerId         String      @map("owner_id") @db.Uuid
+  name            String
+  symbol          String
+  description     String
+  contractAddress String?     @map("contract_address")
+  blockchain      String
+  logoUrl         String?     @map("logo_url")
+  websiteUrl      String?     @map("website_url")
+  twitterUrl      String?     @map("twitter_url")
+  discordUrl      String?     @map("discord_url")
+  telegramUrl     String?     @map("telegram_url")
+  status          TokenStatus @default(PENDING_REVIEW)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  owner     User       @relation("TokenOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("tokens")
+}
+
+// ============================================
+// CAMPAIGN PLATFORM - CAMPAIGNS
+// ============================================
+
+model Campaign {
+  id              String         @id @default(uuid()) @db.Uuid
+  tokenId         String         @map("token_id") @db.Uuid
+  ownerId         String         @map("owner_id") @db.Uuid
+  name            String
+  description     String
+  imageUrl        String?        @map("image_url")
+  type            CampaignType
+  status          CampaignStatus @default(DRAFT)
+  startDate       DateTime       @map("start_date")
+  endDate         DateTime       @map("end_date")
+  totalRewardPool Decimal        @map("total_reward_pool") @db.Decimal(20, 8)
+  participantLimit Int?          @map("participant_limit")
+  participantCount Int           @default(0) @map("participant_count")
+  viewCount       Int            @default(0) @map("view_count")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  token          Token                   @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  owner          User                    @relation("CampaignOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+  participations CampaignParticipation[]
+  payments       Payment[]
+  referralCodes  ReferralCode[]
+
+  @@index([tokenId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@map("campaigns")
+}
+
+model CampaignParticipation {
+  id           String   @id @default(uuid()) @db.Uuid
+  campaignId   String   @map("campaign_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  joinedAt     DateTime @default(now()) @map("joined_at")
+  completedAt  DateTime? @map("completed_at")
+  tasksCompleted Int    @default(0) @map("tasks_completed")
+  totalTasks   Int      @default(0) @map("total_tasks")
+  
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId])
+  @@index([userId])
+  @@map("campaign_participations")
+}
+
+// ============================================
+// CAMPAIGN PLATFORM - TASKS
+// ============================================
+
+model Task {
+  id                 String           @id @default(uuid()) @db.Uuid
+  campaignId         String           @map("campaign_id") @db.Uuid
+  title              String
+  description        String
+  type               TaskType
+  verificationType   VerificationType @map("verification_type")
+  requirements       Json?
+  reward             Decimal          @default(0) @db.Decimal(20, 8)
+  experiencePoints   Int              @default(0) @map("experience_points")
+  order              Int              @default(0)
+  isRequired         Boolean          @default(true) @map("is_required")
+  estimatedTime      Int?             @map("estimated_time")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  campaign      Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  submissions   Submission[]
+  referralCodes ReferralCode[]
+
+  @@index([campaignId])
+  @@map("tasks")
+}
+
+// ============================================
+// CAMPAIGN PLATFORM - SUBMISSIONS
+// ============================================
+
+model Submission {
+  id          String           @id @default(uuid()) @db.Uuid
+  taskId      String           @map("task_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  proofUrl    String?          @map("proof_url")
+  proofText   String?          @map("proof_text")
+  proofFiles  String[]         @map("proof_files")
+  status      SubmissionStatus @default(PENDING)
+  submittedAt DateTime         @default(now()) @map("submitted_at")
+  reviewedAt  DateTime?        @map("reviewed_at")
+
+  task   Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review?
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([status])
+  @@map("submissions")
+}
+
+model Review {
+  id           String   @id @default(uuid()) @db.Uuid
+  submissionId String   @unique @map("submission_id") @db.Uuid
+  reviewerId   String   @map("reviewer_id") @db.Uuid
+  rating       Int?
+  feedback     String?
+  approved     Boolean
+  reviewedAt   DateTime @default(now()) @map("reviewed_at")
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer   User       @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([reviewerId])
+  @@map("reviews")
+}
+
+// ============================================
+// CAMPAIGN PLATFORM - PAYMENTS
+// ============================================
+
+model Payment {
+  id            String        @id @default(uuid()) @db.Uuid
+  campaignId    String        @map("campaign_id") @db.Uuid
+  senderId      String        @map("sender_id") @db.Uuid
+  recipientId   String        @map("recipient_id") @db.Uuid
+  amount        Decimal       @db.Decimal(20, 8)
+  tokenSymbol   String        @map("token_symbol")
+  blockchain    String
+  txHash        String?       @map("tx_hash")
+  status        PaymentStatus @default(PENDING)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  completedAt   DateTime?     @map("completed_at")
+  failureReason String?       @map("failure_reason")
+
+  campaign  Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sender    User     @relation("PaymentSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User     @relation("PaymentRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([status])
+  @@map("payments")
+}
+
+// ============================================
+// CAMPAIGN PLATFORM - GAMIFICATION
+// ============================================
+
+model Badge {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique
+  description String
+  icon        String
+  tier        BadgeTier
+  criteria    Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  userBadges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  badgeId   String   @map("badge_id") @db.Uuid
+  earnedAt  DateTime @default(now()) @map("earned_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+// ============================================
+// SOCIAL FEATURES (EXISTING - KEEP)
 // ============================================
 
 model Post {
@@ -260,4 +597,61 @@ model Notification {
   @@index([userId, isRead])
   @@index([createdAt])
   @@map("notifications")
+}
+
+model Conversation {
+  id          String    @id @default(uuid()) @db.Uuid
+  participant1Id String  @map("participant1_id") @db.Uuid
+  participant2Id String  @map("participant2_id") @db.Uuid
+  lastMessageAt DateTime @default(now()) @map("last_message_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  participant1 User      @relation("ConversationParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
+  participant2 User      @relation("ConversationParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@unique([participant1Id, participant2Id])
+  @@index([participant1Id])
+  @@index([participant2Id])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  senderId       String       @map("sender_id") @db.Uuid
+  content        String
+  isRead         Boolean      @default(false) @map("is_read")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+model ReferralCode {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique
+  userId        String   @map("user_id") @db.Uuid
+  campaignId    String   @map("campaign_id") @db.Uuid
+  taskId        String?  @map("task_id") @db.Uuid
+  timesUsed     Int      @default(0) @map("times_used")
+  maxUses       Int?     @map("max_uses")
+  expiresAt     DateTime? @map("expires_at")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  task     Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([code])
+  @@map("referral_codes")
 }

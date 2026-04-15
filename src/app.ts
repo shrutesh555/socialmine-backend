@@ -15,6 +15,17 @@ import notificationRoutes from './routes/notification.routes';
 import uploadRoutes from './routes/upload.routes';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
+import tokenRoutes from './routes/token.routes';
+import campaignRoutes from './routes/campaign.routes';
+import taskRoutes from './routes/task.routes';
+import submissionRoutes from './routes/submission.routes';
+import reviewRoutes from './routes/review.routes';
+import paymentRoutes from './routes/payment.routes';
+import leaderboardRoutes from './routes/leaderboard.routes';
+import analyticsRoutes from './routes/analytics.routes';
+import settingsRoutes from './routes/settings.routes';
+import messageRoutes from './routes/message.routes';
+import referralRoutes from './routes/referral.routes';
 
 dotenv.config();
 
@@ -23,10 +34,12 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
+// CORS configuration - Allow frontend on port 3001
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: ['http://localhost:3001', 'http://localhost:3000'],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Compression
@@ -78,6 +91,19 @@ app.use(`/api/${apiVersion}/comments`, commentRoutes);
 app.use(`/api/${apiVersion}/profile`, profileRoutes);
 app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
 app.use(`/api/${apiVersion}/upload`, uploadRoutes);
+app.use(`/api/${apiVersion}/tokens`, tokenRoutes);
+app.use(`/api/${apiVersion}/campaigns`, campaignRoutes);
+app.use(`/api/${apiVersion}/tasks`, taskRoutes);
+app.use(`/api/${apiVersion}/submissions`, submissionRoutes);
+app.use(`/api/${apiVersion}/reviews`, reviewRoutes);
+app.use(`/api/${apiVersion}/payments`, paymentRoutes);
+app.use(`/api/${apiVersion}/leaderboard`, leaderboardRoutes);
+app.use(`/api/${apiVersion}/analytics`, analyticsRoutes);
+app.use(`/api/${apiVersion}/settings`, settingsRoutes);
+app.use(`/api/${apiVersion}/messages`, messageRoutes);
+app.use(`/api/${apiVersion}/referrals`, referralRoutes);
+
+// ❌ REMOVED DUPLICATE: app.use('/api/v1/tokens', tokenRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

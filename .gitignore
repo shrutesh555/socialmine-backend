@@ -33,3 +33,7 @@ Thumbs.db
 # Prisma
 prisma/migrations/
 !prisma/migrations/.gitkeep
+
+# Temporary files
+*.backup
+*.zip
