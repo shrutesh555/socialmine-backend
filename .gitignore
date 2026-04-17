@@ -31,7 +31,6 @@ Thumbs.db
 .idea/
 
 # Prisma
-prisma/migrations/
 !prisma/migrations/.gitkeep
 
 # Temporary files
