@@ -10,7 +10,36 @@ import campaignRoutes from './routes/campaign.routes';
 import submissionRoutes from './routes/submission.routes';
 import referralRoutes from './routes/referral.routes';
 import tokenRoutes from './routes/token.routes';
-import taskRoutes from './routes/task.routes';
+
+// DEBUG: Task routes import with error handling
+console.log('🔍 Attempting to import task routes...');
+let taskRoutes: any;
+try {
+  taskRoutes = require('./routes/task.routes').default;
+  console.log('✅ Task routes imported successfully');
+  console.log('✅ Task routes type:', typeof taskRoutes);
+  console.log('✅ Task routes constructor:', taskRoutes?.constructor?.name);
+  console.log('✅ Task routes has stack:', !!taskRoutes?.stack);
+  console.log('✅ Task routes stack length:', taskRoutes?.stack?.length || 0);
+  
+  // Show what routes are actually in the router
+  if (taskRoutes?.stack && taskRoutes.stack.length > 0) {
+    console.log('✅ Routes found in task router:');
+    taskRoutes.stack.forEach((layer: any, index: number) => {
+      const route = layer.route;
+      if (route) {
+        const methods = Object.keys(route.methods || {}).join(', ').toUpperCase();
+        console.log(`   ${index + 1}. ${methods} ${route.path}`);
+      }
+    });
+  } else {
+    console.warn('⚠️  Task router stack is EMPTY!');
+  }
+} catch (error) {
+  console.error('❌ TASK ROUTES IMPORT FAILED:');
+  console.error(error);
+  taskRoutes = null;
+}
 
 // Load environment variables
 dotenv.config();
@@ -66,8 +95,30 @@ app.use('/api/v1/auth', authLimiter, authRoutes);
 // Token routes (medium rate limit)
 app.use('/api/v1/tokens', tokenRoutes);
 
-// Task routes
-app.use('/api/v1/tasks', taskRoutes);
+// Task routes with detailed debugging
+console.log('🔍 Attempting to register task routes...');
+if (taskRoutes) {
+  console.log('🔍 Registering at path: /api/v1/tasks');
+  console.log('🔍 Router object:', {
+    type: typeof taskRoutes,
+    hasStack: !!taskRoutes.stack,
+    stackLength: taskRoutes.stack?.length || 0
+  });
+  
+  app.use('/api/v1/tasks', taskRoutes);
+  console.log('✅ Task routes registered successfully');
+  
+  // Verify by checking app stack
+  const appRouter = (app as any)._router;
+  if (appRouter) {
+    const taskLayer = appRouter.stack.find((layer: any) => 
+      layer.regexp && layer.regexp.toString().includes('tasks')
+    );
+    console.log('✅ Verification: Task route found in app stack:', !!taskLayer);
+  }
+} else {
+  console.error('❌ Task routes is NULL - cannot register!');
+}
 
 // Campaign routes with campaign creation limiter for POST
 app.use('/api/v1/campaigns', (req, res, next) => {
