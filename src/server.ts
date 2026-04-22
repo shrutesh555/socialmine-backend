@@ -10,6 +10,7 @@ import campaignRoutes from './routes/campaign.routes';
 import submissionRoutes from './routes/submission.routes';
 import referralRoutes from './routes/referral.routes';
 import tokenRoutes from './routes/token.routes';
+import taskRoutes from './routes/task.routes';
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +65,9 @@ app.use('/api/v1/auth', authLimiter, authRoutes);
 
 // Token routes (medium rate limit)
 app.use('/api/v1/tokens', tokenRoutes);
+
+// Task routes
+app.use('/api/v1/tasks', taskRoutes);
 
 // Campaign routes with campaign creation limiter for POST
 app.use('/api/v1/campaigns', (req, res, next) => {
