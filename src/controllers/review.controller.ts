@@ -102,12 +102,15 @@ export const reviewSubmission = async (req: Request, res: Response) => {
       });
 
       if (approved) {
-        // Award XP to user profile
+        // Award XP AND tokens to user profile
         await tx.userProfile.update({
           where: { userId: submission.userId },
           data: {
             experiencePoints: {
               increment: submission.task.experiencePoints,
+            },
+            totalEarned: {
+              increment: parseFloat(submission.task.reward.toString()),
             },
             tasksCompleted: {
               increment: 1,
@@ -450,13 +453,16 @@ export const bulkReviewSubmissions = async (req: Request, res: Response) => {
           },
         });
 
-        // Award XP if approved
+        // Award XP AND tokens if approved
         if (reviewData.approved) {
           await prisma.userProfile.update({
             where: { userId: submission.userId },
             data: {
               experiencePoints: {
                 increment: submission.task.experiencePoints,
+              },
+              totalEarned: {
+                increment: parseFloat(submission.task.reward.toString()),
               },
               tasksCompleted: {
                 increment: 1,
