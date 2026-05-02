@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { uploadProfileImage, uploadPostImages, deleteImage } from '../controllers/upload.controller';
+import { uploadProfileImage, uploadPostImages, uploadProofImage, deleteImage } from '../controllers/upload.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { uploadSingle, uploadMultiple } from '../middleware/upload.middleware';
 
@@ -13,6 +13,9 @@ router.post('/profile', uploadSingle, uploadProfileImage);
 
 // Upload post images (up to 5)
 router.post('/post', uploadMultiple, uploadPostImages);
+
+// Upload task proof screenshot
+router.post('/proof', uploadSingle, uploadProofImage);
 
 // Delete image
 router.delete('/image', deleteImage);

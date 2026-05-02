@@ -11,9 +11,9 @@ const uploadToCloudinary = (buffer: Buffer, folder: string): Promise<any> => {
         folder,
         resource_type: 'image',
         transformation: [
-          { width: 1200, height: 1200, crop: 'limit' }, // Max dimensions
-          { quality: 'auto' }, // Auto quality
-          { fetch_format: 'auto' }, // Auto format
+          { width: 1200, height: 1200, crop: 'limit' },
+          { quality: 'auto' },
+          { fetch_format: 'auto' },
         ],
       },
       (error, result) => {
@@ -106,6 +106,44 @@ export const uploadPostImages = async (req: AuthRequest, res: Response) => {
       error: {
         code: 'UPLOAD_FAILED',
         message: 'Failed to upload images',
+      },
+    });
+  }
+};
+
+// Upload task proof screenshot
+export const uploadProofImage = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'NO_FILE',
+          message: 'No image file provided',
+        },
+      });
+    }
+
+    const userId = req.user!.userId;
+
+    // Upload to Cloudinary in proof folder
+    const result = await uploadToCloudinary(req.file.buffer, `socialmine/proofs/${userId}`);
+
+    return res.json({
+      success: true,
+      data: {
+        url: result.secure_url,
+        publicId: result.public_id,
+      },
+      message: 'Proof image uploaded successfully',
+    });
+  } catch (error) {
+    console.error('Upload proof image error:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'UPLOAD_FAILED',
+        message: 'Failed to upload proof image',
       },
     });
   }
