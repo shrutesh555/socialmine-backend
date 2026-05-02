@@ -17,10 +17,20 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import tokenRoutes from './routes/token.routes';
 import campaignRoutes from './routes/campaign.routes';
-import taskRoutes from './routes/task.routes';
-console.log('🔍 DEBUG: Task routes imported:', !!taskRoutes);
-console.log('🔍 DEBUG: Task routes type:', typeof taskRoutes);
-console.log('🔍 DEBUG: Task routes stack length:', taskRoutes?.stack?.length || 0);
+
+// DEBUG: Wrap task routes import in try-catch
+console.log('🔍 Attempting to import task routes...');
+let taskRoutes: any;
+try {
+  taskRoutes = require('./routes/task.routes').default;
+  console.log('✅ Task routes imported successfully:', !!taskRoutes);
+  console.log('✅ Task routes type:', typeof taskRoutes);
+  console.log('✅ Task routes stack:', taskRoutes?.stack?.length || 0);
+} catch (error) {
+  console.error('❌ TASK ROUTES IMPORT FAILED:', error);
+  taskRoutes = null;
+}
+
 import submissionRoutes from './routes/submission.routes';
 import reviewRoutes from './routes/review.routes';
 import paymentRoutes from './routes/payment.routes';
@@ -96,8 +106,16 @@ app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
 app.use(`/api/${apiVersion}/upload`, uploadRoutes);
 app.use(`/api/${apiVersion}/tokens`, tokenRoutes);
 app.use(`/api/${apiVersion}/campaigns`, campaignRoutes);
-app.use(`/api/${apiVersion}/tasks`, taskRoutes);
-console.log(`✅ REGISTERED: /api/${apiVersion}/tasks with ${taskRoutes?.stack?.length || 0} routes`);
+
+// Register task routes with error handling
+console.log('🔍 Registering task routes at:', `/api/${apiVersion}/tasks`);
+if (taskRoutes) {
+  app.use(`/api/${apiVersion}/tasks`, taskRoutes);
+  console.log('✅ Task routes registered successfully');
+} else {
+  console.error('❌ Task routes is null/undefined - NOT REGISTERED');
+}
+
 app.use(`/api/${apiVersion}/submissions`, submissionRoutes);
 app.use(`/api/${apiVersion}/reviews`, reviewRoutes);
 app.use(`/api/${apiVersion}/payments`, paymentRoutes);
@@ -106,8 +124,6 @@ app.use(`/api/${apiVersion}/analytics`, analyticsRoutes);
 app.use(`/api/${apiVersion}/settings`, settingsRoutes);
 app.use(`/api/${apiVersion}/messages`, messageRoutes);
 app.use(`/api/${apiVersion}/referrals`, referralRoutes);
-
-// ❌ REMOVED DUPLICATE: app.use('/api/v1/tokens', tokenRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
