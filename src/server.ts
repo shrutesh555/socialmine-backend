@@ -22,6 +22,7 @@ import messageRoutes from './routes/message.routes';
 import postRoutes from './routes/post.routes';
 import commentRoutes from './routes/comment.routes';
 import notificationRoutes from './routes/notification.routes';
+import roleRoutes from './routes/role.routes';
 
 // Load environment variables
 dotenv.config();
@@ -84,6 +85,7 @@ app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/messages', messageRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/roles', roleRoutes);
 
 // Social features
 app.use('/api/v1/posts', postRoutes);
