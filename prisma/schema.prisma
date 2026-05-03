@@ -143,6 +143,13 @@ enum BadgeTier {
   LEGEND
 }
 
+enum ParticipationRole {
+  MINER
+  REVIEWER
+  EDITOR
+  ADMIN
+}
+
 // ============================================
 // USER & PROFILE
 // ============================================
@@ -328,6 +335,7 @@ model CampaignParticipation {
   completedAt  DateTime? @map("completed_at")
   tasksCompleted Int    @default(0) @map("tasks_completed")
   totalTasks   Int      @default(0) @map("total_tasks")
+  role         ParticipationRole @default(MINER)
   
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
