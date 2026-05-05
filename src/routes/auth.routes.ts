@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { signup, login, logout, refreshToken } from '../controllers/auth.controller';
+import { signup, login, logout, refreshToken, googleAuth } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validate, signupSchema, loginSchema } from '../utils/validation.util';
 
@@ -156,5 +156,6 @@ router.post('/logout', authenticate, logout);
  *         description: Invalid refresh token
  */
 router.post('/refresh', refreshToken);
+router.post('/google', googleAuth);
 
 export default router;

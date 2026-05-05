@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import prisma from '../config/database';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.util';
+import { OAuth2Client } from 'google-auth-library';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const signup = async (req: Request, res: Response) => {
   try {
@@ -239,6 +242,113 @@ if (validatedReferralCode.task) {
         code: 'INTERNAL_ERROR',
         message: 'Failed to create account',
       },
+    });
+  }
+};
+
+export const googleAuth = async (req: Request, res: Response) => {
+  try {
+    const { credential, userType } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_CREDENTIAL', message: 'Google credential is required' },
+      });
+    }
+
+    // Verify Google token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_TOKEN', message: 'Invalid Google token' },
+      });
+    }
+
+    const { email, name, picture, sub: googleId } = payload;
+
+    // Check if user exists
+    let user = await prisma.user.findUnique({ where: { email } });
+    let isNewUser = false;
+
+    if (!user) {
+      // Create new user
+      isNewUser = true;
+      const username = email.split('@')[0] + Math.floor(Math.random() * 1000);
+
+      user = await prisma.$transaction(async (tx: any) => {
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            passwordHash: '', // No password for Google users
+            username,
+            userType: userType || 'MINER',
+            emailVerified: true, // Google email is already verified
+          },
+        });
+
+        await tx.userProfile.create({
+          data: {
+            userId: newUser.id,
+            displayName: name || username,
+            avatarUrl: picture || '',
+          },
+        });
+
+        return newUser;
+      });
+    }
+
+    // Check if account is active
+    if (user.status !== 'ACTIVE') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'ACCOUNT_SUSPENDED', message: 'Your account has been suspended' },
+      });
+    }
+
+    // Update last login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+
+    // Generate tokens
+    const jwtPayload = {
+      userId: user.id,
+      email: user.email,
+      userType: user.userType,
+    };
+
+    const accessToken = generateAccessToken(jwtPayload);
+    const refreshToken = generateRefreshToken(jwtPayload);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken,
+        expiresIn: 3600,
+        isNewUser,
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          userType: user.userType,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Google auth error:', error);
+    return res.status(500).json({
+      success: false,
+      error: { code: 'GOOGLE_AUTH_FAILED', message: 'Google authentication failed' },
     });
   }
 };
