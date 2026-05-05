@@ -65,12 +65,16 @@ router.patch('/profile', authenticate, async (req: any, res) => {
         displayName: displayName || undefined,
         bio: bio || undefined,
         avatarUrl: avatarUrl || undefined,
+        twitterHandle: req.body.twitterHandle || undefined,
+        telegramHandle: req.body.telegramHandle || undefined,
       },
       create: {
         userId,
         displayName: displayName || '',
         bio: bio || '',
         avatarUrl: avatarUrl || '',
+        twitterHandle: req.body.twitterHandle || '',
+        telegramHandle: req.body.telegramHandle || '',
       }
     });
 

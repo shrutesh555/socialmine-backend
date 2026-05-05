@@ -223,6 +223,8 @@ model UserProfile {
   level                 Int      @default(1)
   trustScore            Int      @default(500) @map("trust_score")
   approvalRate          Decimal  @default(0) @map("approval_rate") @db.Decimal(5, 2)
+  twitterHandle         String?  @map("twitter_handle")
+  telegramHandle        String?  @map("telegram_handle")
   
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
