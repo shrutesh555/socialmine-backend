@@ -12,7 +12,6 @@ export const signup = async (req: Request, res: Response) => {
 
     console.log('🚀 Signup request:', { email, username, userType, referralCode, campaignId });
 
-    // Check if user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email }, { username }],
@@ -31,68 +30,49 @@ export const signup = async (req: Request, res: Response) => {
       });
     }
 
-    // Validate referral code if provided
     let validatedReferralCode = null;
     if (referralCode) {
       console.log('🔍 Validating referral code:', referralCode);
-      
+
       validatedReferralCode = await prisma.referralCode.findUnique({
         where: { code: referralCode.toUpperCase() },
-        include: {
-          campaign: true,
-          task: true,
-        },
+        include: { campaign: true, task: true },
       });
 
       if (!validatedReferralCode) {
         return res.status(400).json({
           success: false,
-          error: {
-            code: 'INVALID_REFERRAL_CODE',
-            message: 'Invalid referral code',
-          },
+          error: { code: 'INVALID_REFERRAL_CODE', message: 'Invalid referral code' },
         });
       }
 
       if (!validatedReferralCode.isActive) {
         return res.status(400).json({
           success: false,
-          error: {
-            code: 'INACTIVE_REFERRAL_CODE',
-            message: 'Referral code is no longer active',
-          },
+          error: { code: 'INACTIVE_REFERRAL_CODE', message: 'Referral code is no longer active' },
         });
       }
 
       if (validatedReferralCode.expiresAt && validatedReferralCode.expiresAt < new Date()) {
         return res.status(400).json({
           success: false,
-          error: {
-            code: 'EXPIRED_REFERRAL_CODE',
-            message: 'Referral code has expired',
-          },
+          error: { code: 'EXPIRED_REFERRAL_CODE', message: 'Referral code has expired' },
         });
       }
 
       if (validatedReferralCode.maxUses && validatedReferralCode.timesUsed >= validatedReferralCode.maxUses) {
         return res.status(400).json({
           success: false,
-          error: {
-            code: 'REFERRAL_CODE_MAXED',
-            message: 'Referral code has reached maximum usage',
-          },
+          error: { code: 'REFERRAL_CODE_MAXED', message: 'Referral code has reached maximum usage' },
         });
       }
 
       console.log('✅ Referral code is valid');
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create user with profile, referral, and campaign join in a transaction
     const user = await prisma.$transaction(async (tx: any) => {
-      // 1. Create user
       const newUser = await tx.user.create({
         data: {
           email,
@@ -105,18 +85,13 @@ export const signup = async (req: Request, res: Response) => {
 
       console.log('✅ User created:', newUser.id);
 
-      // 2. Create user profile
       await tx.userProfile.create({
-        data: {
-          userId: newUser.id,
-        },
+        data: { userId: newUser.id },
       });
 
       console.log('✅ User profile created');
 
-      // 3. Handle referral code if present
       if (validatedReferralCode) {
-        // Increment referral code usage
         await tx.referralCode.update({
           where: { id: validatedReferralCode.id },
           data: { timesUsed: { increment: 1 } },
@@ -124,49 +99,42 @@ export const signup = async (req: Request, res: Response) => {
 
         console.log('✅ Referral code usage incremented');
 
-        // Award rewards to referrer
-        // Award rewards to referrer AND new user
-if (validatedReferralCode.task) {
-  const referrerReward = parseFloat(validatedReferralCode.task.reward?.toString() || '0');
-  const referrerXP = validatedReferralCode.task.experiencePoints || 0;
+        if (validatedReferralCode.task) {
+          const referrerReward = parseFloat(validatedReferralCode.task.reward?.toString() || '0');
+          const referrerXP = validatedReferralCode.task.experiencePoints || 0;
 
-  // Referrer gets full reward
-  await tx.userProfile.update({
-    where: { userId: validatedReferralCode.userId },
-    data: {
-      totalEarned: { increment: referrerReward },
-      experiencePoints: { increment: referrerXP },
-    },
-  });
+          await tx.userProfile.update({
+            where: { userId: validatedReferralCode.userId },
+            data: {
+              totalEarned: { increment: referrerReward },
+              experiencePoints: { increment: referrerXP },
+            },
+          });
 
-  console.log('✅ Rewards awarded to referrer:', { reward: referrerReward, xp: referrerXP });
+          console.log('✅ Rewards awarded to referrer:', { reward: referrerReward, xp: referrerXP });
 
-  // NEW USER gets welcome bonus (25% of referrer's reward)
-  const welcomeBonus = referrerReward * 0.25; // 25% of referrer reward
-  const welcomeXP = Math.floor(referrerXP * 0.25); // 25% of referrer XP
+          const welcomeBonus = referrerReward * 0.25;
+          const welcomeXP = Math.floor(referrerXP * 0.25);
 
-  await tx.userProfile.update({
-    where: { userId: newUser.id },
-    data: {
-      totalEarned: { increment: welcomeBonus },
-      experiencePoints: { increment: welcomeXP },
-    },
-  });
+          await tx.userProfile.update({
+            where: { userId: newUser.id },
+            data: {
+              totalEarned: { increment: welcomeBonus },
+              experiencePoints: { increment: welcomeXP },
+            },
+          });
 
-  console.log('✅ Welcome bonus awarded to new user:', { bonus: welcomeBonus, xp: welcomeXP });
-}
+          console.log('✅ Welcome bonus awarded to new user:', { bonus: welcomeBonus, xp: welcomeXP });
+        }
 
-        // 4. Auto-join campaign if campaignId provided or from referral code
         const targetCampaignId = campaignId || validatedReferralCode.campaignId;
-        
+
         if (targetCampaignId) {
-          // Check if campaign exists and is active
           const campaign = await tx.campaign.findUnique({
             where: { id: targetCampaignId },
           });
 
           if (campaign && campaign.status === 'ACTIVE') {
-            // Check if user hasn't already joined
             const existingParticipation = await tx.campaignParticipation.findUnique({
               where: {
                 campaignId_userId: {
@@ -177,7 +145,6 @@ if (validatedReferralCode.task) {
             });
 
             if (!existingParticipation) {
-              // Count total tasks for this campaign
               const totalTasks = await tx.task.count({
                 where: { campaignId: targetCampaignId },
               });
@@ -190,7 +157,6 @@ if (validatedReferralCode.task) {
                 },
               });
 
-              // Increment campaign participant count
               await tx.campaign.update({
                 where: { id: targetCampaignId },
                 data: { participantCount: { increment: 1 } },
@@ -205,7 +171,6 @@ if (validatedReferralCode.task) {
       return newUser;
     });
 
-    // Generate tokens
     const payload = {
       userId: user.id,
       email: user.email,
@@ -230,18 +195,15 @@ if (validatedReferralCode.task) {
           userType: user.userType,
         },
       },
-      message: validatedReferralCode 
-        ? 'Account created and campaign joined successfully!' 
+      message: validatedReferralCode
+        ? 'Account created and campaign joined successfully!'
         : 'Account created successfully',
     });
   } catch (error) {
     console.error('❌ Signup error:', error);
     return res.status(500).json({
       success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to create account',
-      },
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to create account' },
     });
   }
 };
@@ -257,7 +219,6 @@ export const googleAuth = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify Google token
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
       audience: process.env.GOOGLE_CLIENT_ID,
@@ -271,14 +232,12 @@ export const googleAuth = async (req: Request, res: Response) => {
       });
     }
 
-    const { email, name, picture, sub: googleId } = payload;
+    const { email, name, picture } = payload;
 
-    // Check if user exists
     let user = await prisma.user.findUnique({ where: { email } });
     let isNewUser = false;
 
     if (!user) {
-      // Create new user
       isNewUser = true;
       const username = email.split('@')[0] + Math.floor(Math.random() * 1000);
 
@@ -286,10 +245,10 @@ export const googleAuth = async (req: Request, res: Response) => {
         const newUser = await tx.user.create({
           data: {
             email,
-            passwordHash: '', // No password for Google users
+            passwordHash: '',
             username,
             userType: userType || 'MINER',
-            emailVerified: true, // Google email is already verified
+            emailVerified: true,
           },
         });
 
@@ -305,7 +264,13 @@ export const googleAuth = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if account is active
+    if (!user) {
+      return res.status(500).json({
+        success: false,
+        error: { code: 'GOOGLE_AUTH_FAILED', message: 'Failed to create user account' },
+      });
+    }
+
     if (user.status !== 'ACTIVE') {
       return res.status(403).json({
         success: false,
@@ -313,13 +278,11 @@ export const googleAuth = async (req: Request, res: Response) => {
       });
     }
 
-    // Update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
 
-    // Generate tokens
     const jwtPayload = {
       userId: user.id,
       email: user.email,
@@ -357,7 +320,6 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    // Find user
     const user = await prisma.user.findUnique({
       where: { email },
     });
@@ -365,44 +327,31 @@ export const login = async (req: Request, res: Response) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: {
-          code: 'INVALID_CREDENTIALS',
-          message: 'Invalid email or password',
-        },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' },
       });
     }
 
-    // Verify password
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
 
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
-        error: {
-          code: 'INVALID_CREDENTIALS',
-          message: 'Invalid email or password',
-        },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' },
       });
     }
 
-    // Check if account is active
     if (user.status !== 'ACTIVE') {
       return res.status(403).json({
         success: false,
-        error: {
-          code: 'ACCOUNT_SUSPENDED',
-          message: 'Your account has been suspended',
-        },
+        error: { code: 'ACCOUNT_SUSPENDED', message: 'Your account has been suspended' },
       });
     }
 
-    // Update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
 
-    // Generate tokens
     const payload = {
       userId: user.id,
       email: user.email,
@@ -430,10 +379,7 @@ export const login = async (req: Request, res: Response) => {
     console.error('Login error:', error);
     return res.status(500).json({
       success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to login',
-      },
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to login' },
     });
   }
 };
@@ -445,17 +391,12 @@ export const refreshToken = async (req: Request, res: Response) => {
     if (!refreshToken) {
       return res.status(400).json({
         success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Refresh token is required',
-        },
+        error: { code: 'VALIDATION_ERROR', message: 'Refresh token is required' },
       });
     }
 
-    // Verify refresh token
     const decoded = verifyRefreshToken(refreshToken);
 
-    // Generate new access token
     const accessToken = generateAccessToken({
       userId: decoded.userId,
       email: decoded.email,
@@ -472,10 +413,7 @@ export const refreshToken = async (req: Request, res: Response) => {
   } catch (error) {
     return res.status(401).json({
       success: false,
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or expired refresh token',
-      },
+      error: { code: 'UNAUTHORIZED', message: 'Invalid or expired refresh token' },
     });
   }
 };
