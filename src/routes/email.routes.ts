@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import prisma from '../config/database';
@@ -8,9 +8,8 @@ const router = Router();
 
 /**
  * POST /api/v1/email/send-verification
- * Resend verification email (if user is not yet verified)
  */
-router.post('/send-verification', async (req: Request, res: Response) => {
+router.post('/send-verification', async (req: any, res: any) => {
   try {
     const { email } = req.body;
 
@@ -24,7 +23,6 @@ router.post('/send-verification', async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      // Don't reveal if user exists
       return res.json({
         success: true,
         message: 'If an account exists, a verification email has been sent.',
@@ -38,9 +36,8 @@ router.post('/send-verification', async (req: Request, res: Response) => {
       });
     }
 
-    // Generate verification token
     const token = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -67,11 +64,10 @@ router.post('/send-verification', async (req: Request, res: Response) => {
 
 /**
  * GET /api/v1/email/verify/:token
- * Verify email with token
  */
-router.get('/verify/:token', async (req: Request, res: Response) => {
+router.get('/verify/:token', async (req: any, res: any) => {
   try {
-    const token = req.params.token as string;
+    const token: string = req.params.token;
 
     const user = await prisma.user.findFirst({
       where: {
@@ -111,9 +107,8 @@ router.get('/verify/:token', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/email/forgot-password
- * Send password reset email
  */
-router.post('/forgot-password', async (req: Request, res: Response) => {
+router.post('/forgot-password', async (req: any, res: any) => {
   try {
     const { email } = req.body;
 
@@ -126,7 +121,6 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // Always return success (don't reveal if user exists)
     if (!user) {
       return res.json({
         success: true,
@@ -134,9 +128,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       });
     }
 
-    // Generate reset token
     const token = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const expiry = new Date(Date.now() + 60 * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -163,9 +156,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/email/reset-password
- * Reset password with token
  */
-router.post('/reset-password', async (req: Request, res: Response) => {
+router.post('/reset-password', async (req: any, res: any) => {
   try {
     const { token, password } = req.body;
 
