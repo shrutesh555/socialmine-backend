@@ -71,7 +71,7 @@ router.post('/send-verification', async (req: Request, res: Response) => {
  */
 router.get('/verify/:token', async (req: Request, res: Response) => {
   try {
-    const { token } = req.params;
+    const token = req.params.token as string;
 
     const user = await prisma.user.findFirst({
       where: {
