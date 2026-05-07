@@ -180,6 +180,23 @@ export const signup = async (req: Request, res: Response) => {
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
+    // Send verification email
+    try {
+      const crypto = require('crypto');
+      const { sendVerificationEmail } = require('../utils/email.util');
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerificationToken: verifyToken,
+          emailVerificationExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      await sendVerificationEmail(email, verifyToken);
+      console.log('✅ Verification email sent');
+    } catch (emailErr) {
+      console.error('⚠️ Failed to send verification email:', emailErr);
+    }
     console.log('✅ Signup complete:', user.username);
 
     return res.status(201).json({
@@ -271,6 +288,16 @@ export const googleAuth = async (req: Request, res: Response) => {
       });
     }
 
+    // Check email verification
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'EMAIL_NOT_VERIFIED',
+          message: 'Please verify your email before logging in. Check your inbox for the verification link.',
+        },
+      });
+    }
     if (user.status !== 'ACTIVE') {
       return res.status(403).json({
         success: false,

@@ -165,6 +165,10 @@ model User {
   updatedAt     DateTime   @updatedAt @map("updated_at")
   lastLogin     DateTime?  @map("last_login")
   status        UserStatus @default(ACTIVE)
+  emailVerificationToken  String?  @map("email_verification_token")
+  emailVerificationExpiry DateTime? @map("email_verification_expiry")
+  passwordResetToken      String?  @map("password_reset_token")
+  passwordResetExpiry     DateTime? @map("password_reset_expiry")
   referredBy    String?    @map("referred_by") @db.Uuid
   referrer      User?      @relation("UserReferrals", fields: [referredBy], references: [id])
   referrals     User[]     @relation("UserReferrals")
